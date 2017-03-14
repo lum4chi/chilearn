@@ -33,9 +33,9 @@ class KTopScoringPair:
         Attributes
         ----------
         estimated_proba_ : 2d array of float
-            Estimated probability computed from
+            Estimated probability computed from training.
         rules_ : array of shape = [n_classes]
-            TODO description
+            Human-readable K rules found with training.
         ----------
         .. [1] AFSARI, Bahman, et al. Rank discriminants for predicting phenotypes
         from RNA expression. The Annals of Applied Statistics, 2014, 8.3: 1469-1491.
