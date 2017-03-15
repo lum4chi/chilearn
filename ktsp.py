@@ -86,30 +86,47 @@ class KTopScoringPair:
         Freq, Size = pd.DataFrame(pairs_dict), pd.Series(class_size)
         return Freq, Size
 
-    def predict(self, X):
+    def predict(self, X, K=None, t=None):
         """ Predict the provided X.
             Parameters
             ----------
             X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            K : int, optional.
+                Once estimated_proba_ were computed there is no problem to vary K and
+                use K-rules different from __init__ time K
+            t : int, optional
+                Same as above
             Returns
             -------
             y : array-like of shape = [n_samples]
         """
-        P = self.predict_proba(X)
+        P = self.predict_proba(X, K)
         # Translate most probable class with its label
         return self.classes_[np.argmax(P, axis=1)]
 
-    def predict_proba(self, X):
+    def predict_proba(self, X, K=None, t=None):
         """ Predict the provided X with probabilities.
             Parameters
             ----------
             X : {array-like, sparse matrix} of shape = [n_samples, n_features]
+            K : int, optional.
+                Once estimated_proba_ were computed there is no problem to vary K and
+                use K-rules different from __init__ time K
+            t : int, optional
+                Same as above
             Returns
             -------
             p : array of shape = [n_samples, n_class]
         """
         def vote_for(x):
             return [r['ifTrue'] if x[r['i']] < x[r['j']] else r['ifFalse'] for r in self.rules_]
+
+        # Rebuild rules if K or t is different from __init__ time K
+        if (K is not None and K != self.K) or (t is not None and t != self.t):
+            P = self.estimated_proba_
+            self.K = self.K if K is None else K
+            self.t = self.t if t is None else t
+            self.rules_ = self._scorer(P, self.K, self.t, P.columns[0], P.columns[1])
 
         # Gather votes for every sample -> V = (n, k)
         V = [vote_for(x) for _, x in X.iterrows()]
@@ -157,29 +174,30 @@ class KTopScoringPair:
         # Count frequencies-sizes for this chunk
         return self._fit(X, y, self.pairs)
 
-    def _scorer(self, Pr, K, plus, minus):
-        # Not efficient friendly, but at least produce human-readable rules.
-        def formatted_rule(i, j, condition):
+    def _scorer(self, P, K, t, plus, minus):
+        # Not efficient friendly, but produce human-readable rules.
+        def formatted_rule(i, j, condition, score):
             if condition:
-                return dict(rule="i<j", i=i, j=j, ifTrue=plus, ifFalse=minus)
+                return dict(rule="i<j", i=i, j=j, ifTrue=plus, ifFalse=minus, score=score)
             else:
-                return dict(rule="i<j", i=i, j=j, ifTrue=minus, ifFalse=plus)
+                return dict(rule="i<j", i=i, j=j, ifTrue=minus, ifFalse=plus, score=score)
 
         # Ordering depends on who is subtracted from who
-        scores = Pr[plus] - Pr[minus]
+        scores = P[plus] - P[minus]
         ranked = scores.abs().sort_values(ascending=False)
         # Compute rules, ranked by descending score
-        rules = [formatted_rule(k[0], k[1], scores[k] > self.t) for k in islice(iter(ranked.keys()), K)]
+        rules = [formatted_rule(k[0], k[1], scores[k] > t, scores[k])
+                 for k in islice(iter(ranked.keys()), K)]
         return rules
 
     def _compute_proba(self, Frequencies, Sizes):
         # Mainly for debugging purposes
         self.frequencies_, self.sizes_ = Frequencies, Sizes
         # Compute P = |{X_i < X_i | Y}| / |Y|
-        Pr = Frequencies / Sizes
-        self.estimated_proba_ = Pr
+        P = Frequencies / Sizes
+        self.estimated_proba_ = P
         # Build rules
-        self.rules_ = self._scorer(Pr, self.K, Pr.columns[0], Pr.columns[1])
+        self.rules_ = self._scorer(P, self.K, self.t, P.columns[0], P.columns[1])
 
     def get_params(self, deep=True):
         return {"pairs": self.pairs, "K": self.K, "t": self.t}
