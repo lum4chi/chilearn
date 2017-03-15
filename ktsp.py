@@ -4,7 +4,7 @@
 
 import pandas as pd
 import numpy as np
-from itertools import combinations, islice
+from itertools import islice
 from sklearn.utils.validation import check_X_y
 
 
@@ -182,7 +182,7 @@ class KTopScoringPair:
             else:
                 return {"i":i, "j":j, "i<j":plus, "j<i":minus, "score":score}
 
-        # Ordering depends on who is subtracted from who
+        # +/- scores depends on what is subtracted from what
         scores = P[minus] - P[plus]
         ranked = scores.abs().sort_values(ascending=False)
         # Compute rules, ranked by descending score
