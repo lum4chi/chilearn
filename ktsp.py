@@ -76,7 +76,7 @@ class KTopScoringPair:
         class_size = {l: 0 for l in range(len(self.classes_))}
         # Class loop
         for label in pairs_dict.keys():
-            X_given_y = X[y == label]
+            X_given_y = X[y==label]
             class_size[label] = X_given_y.shape[0]
             class_pairs = pairs_dict[label]
             # Pairs loop
@@ -119,7 +119,7 @@ class KTopScoringPair:
             p : array of shape = [n_samples, n_class]
         """
         def vote_for(x):
-            return [r['ifTrue'] if x[r['i']] < x[r['j']] else r['ifFalse'] for r in self.rules_]
+            return [r['i<j'] if x[r['i']] < x[r['j']] else r['j<i'] for r in self.rules_]
 
         # Rebuild rules if K or t is different from __init__ time K
         if (K is not None and K != self.K) or (t is not None and t != self.t):
@@ -132,9 +132,9 @@ class KTopScoringPair:
         V = [vote_for(x) for _, x in X.iterrows()]
         # Group votes by class -> P (n, c)
         P = [{k: v for k, v in zip(*np.unique(v, return_counts=True))} for v in V]
-        P = pd.DataFrame(P)
+        P = pd.DataFrame(P).fillna(0)
         # Normalized it to emit probabilities
-        return (P / P.max()).as_matrix()
+        return (P / self.K).as_matrix()
 
     def partial_fit(self, X_batch, y_batch, classes):
         """ Train the classifier by chunk. This can take advantage of multiprocessing
@@ -174,16 +174,16 @@ class KTopScoringPair:
         # Count frequencies-sizes for this chunk
         return self._fit(X, y, self.pairs)
 
-    def _scorer(self, P, K, t, plus, minus):
+    def _scorer(self, P, K, t, minus, plus):
         # Not efficient friendly, but produce human-readable rules.
-        def formatted_rule(i, j, condition, score):
-            if condition:
-                return dict(rule="i<j", i=i, j=j, ifTrue=plus, ifFalse=minus, score=score)
+        def formatted_rule(i, j, isPositive, score):
+            if isPositive:
+                return {"i":i, "j":j, "i<j":minus, "j<i":plus, "score":score}
             else:
-                return dict(rule="i<j", i=i, j=j, ifTrue=minus, ifFalse=plus, score=score)
+                return {"i":i, "j":j, "i<j":plus, "j<i":minus, "score":score}
 
         # Ordering depends on who is subtracted from who
-        scores = P[plus] - P[minus]
+        scores = P[minus] - P[plus]
         ranked = scores.abs().sort_values(ascending=False)
         # Compute rules, ranked by descending score
         rules = [formatted_rule(k[0], k[1], scores[k] > t, scores[k])
@@ -207,23 +207,20 @@ class KTopScoringPair:
             self.setattr(parameter, value)
         return self
 
+    def human_rules(self, features):
+        """ Allow rules convertion for human reading.
+            Parameters
+            ----------
+            rules : rules list with i and j as integer
+            features : list of feature name corresponding to i,j indexing
+            classes : list of classes name
+            Returns
+            -------
+        """
+        import copy as cp
 
-# Utility
-
-def all_pairs(features):
-    # WARNING!!!
-    return list(combinations(features, 2))
-
-
-def ascending_bigrams(X):
-    # Ogni osservazione è ordinata a < b < c < ... e poi bigrammata
-    def bigrams(lst):
-        a, b = iter(lst), iter(lst[1:])
-        return list(zip(a, b))
-
-    # Loop ordinante, uso set() per eliminare coppie duplicate
-    pairs = set()
-    for _, r in X.iterrows():
-        pairs = pairs.union(set(bigrams(r.sort_values().index)))
-
-    return pairs
+        hr_rules = cp.deepcopy(self.rules_)
+        for d in hr_rules:
+            d['i'], d['j'] = features[d['i']], features[d['j']]
+            d['i<j'], d['j<i'] = self.classes_[d['i<j']], self.classes_[d['j<i']]
+        return hr_rules
