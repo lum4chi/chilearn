@@ -116,7 +116,7 @@ class KTopScoringPair:
                 Same as above
             Returns
             -------
-            p : array of shape = [n_samples, n_class]
+            P : array of shape = [n_samples, n_class]
         """
         def vote_for(x):
             return [r['i<j'] if x[r['i']] < x[r['j']] else r['j<i'] for r in self.rules_]
@@ -211,11 +211,10 @@ class KTopScoringPair:
         """ Allow rules convertion for human reading.
             Parameters
             ----------
-            rules : rules list with i and j as integer
             features : list of feature name corresponding to i,j indexing
-            classes : list of classes name
             Returns
             -------
+            hr_rules : list of rules, with label converted according to input
         """
         import copy as cp
 
