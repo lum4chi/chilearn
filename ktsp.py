@@ -132,7 +132,7 @@ class KTopScoringPair:
         V = [vote_for(x) for _, x in X.iterrows()]
         # Group votes by class -> P (n, c)
         P = [{k: v for k, v in zip(*np.unique(v, return_counts=True))} for v in V]
-        P = pd.DataFrame(P).fillna(0)
+        P = pd.DataFrame(P, columns=self.classes_).fillna(0)
         # Normalized it to emit probabilities
         return (P / self.K).as_matrix()
 
